@@ -1,3 +1,4 @@
+//Define global variables
 var calculatedD;
 var dischargeQ;
 var canvasColor = "#102C57";
