@@ -1,0 +1,87 @@
+
+Export.table.toAsset({
+collection: roi
+});
+
+var image = ee.ImageCollection("LANDSAT/LC08/C02/T1_L2")
+    .filterDate('Start_dateYYYY-MM-DD', 'End_dateYYYY-MM-DD')
+    .filterBounds(roi)
+    .filter(ee.Filter.eq('DATE_ACQUIRED', 'YYYY-MM-DD'))
+    .first()
+    
+print(image);
+
+Map.addLayer(image, {bands: ['SR_B6', 'SR_B5', 'SR_B3'], min: 5000, max: 40000}, 'landsat_20220510');
+Map.addLayer(training_polygons, {}, 'training') ;
+Map.addLayer(gandak_floodplain, {}, 'gandak_shape');
+
+var imageTrial = image.clip(gandak_floodplain);
+
+// // Make the training dataset
+var training = image.sample({
+region: gandak_floodplain,
+scale: 30,
+numPixels: 5000
+});
+
+// // Instantiate the clusterer and train it.
+var clusterer = ee.Clusterer.wekaKMeans(10).train(training);
+
+// // Cluster the input using the trained clusterer
+var result = imageTrial.cluster(clusterer);
+
+// // Display the clusters with random colors
+Map.addLayer(result.randomVisualizer(), {}, 'clusters');
+
+print(result);
+
+// // Retrieve the projection information from a band of the original image.
+// // Call getInfo() on the projection to request a client-side object containing
+// // the crs and transform information needed for the client-side Export function.
+// var projection = image.select('SR_B5').projection().getInfo();
+// print(projection);
+
+// // Export the image, specifying the CRS, transform, and region.
+// Export.image.toDrive({
+//   image: result,
+//   folder: 'folderName',
+//   description: 'enterDescription',
+//   crs: projection.crs,
+//   crsTransform: projection.transform,
+//   region: gandak_floodplain
+// });
+
+var chart_area = ui.Chart.image.byClass({
+  image: ee.Image.pixelArea().addBands(result),
+  classBand: 'cluster',
+  region: gandak_floodplain,
+  reducer: ee.Reducer.sum(),
+  scale: 30,
+  classLabels: [],
+  xLabels:[]
+  })
+print(chart_area);
+
+var waterImage = result.select('cluster').eq(3);
+Map.addLayer(waterImage, {}, 'cluster3 water');
+
+// var sandImage = result.select('cluster').eq(6);
+// Map.addLayer(sandImage, {}, 'cluster6 sand');
+
+// var finalAreaImageSand = sandImage.multiply(ee.Image.pixelArea());
+var finalAreaImageWater = waterImage.multiply(ee.Image.pixelArea());
+
+
+var waterAreas = finalAreaImageWater.reduceRegion({
+reducer: ee.Reducer.sum(),
+scale: 30,
+maxPixels: 60e9
+})
+print(waterAreas)
+
+// var sandAreas = finalAreaImageSand.reduceRegion({
+// reducer: ee.Reducer.sum(),
+// scale: 30,
+// maxPixels: 60e9
+// })
+// print(sandAreas)
