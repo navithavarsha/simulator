@@ -1,0 +1,585 @@
+var calculatedD;
+var dischargeQ;
+var canvasColor = "#102C57";
+var backgroundColor = "#F8F0E5";
+var textFontFamily = "Lucida Sans";
+var buttonFontFamily = "Gadugi";
+var buttonColor = "";
+var sliderBackgroundColor = "#DAC0A3";
+var legendBackgroundColor = '#f8f0e5f7';
+
+// Define base map style.
+var basemapStyle = [
+  // Base map style options...
+];
+
+// Clear existing map.
+ui.root.clear();
+
+// Initiate new map object.
+var map = ui.Map();
+
+// Set basemap options.
+map.setOptions('HYBRID');
+
+// Set visibility options to remove controls.
+map.setControlVisibility({
+  all: false,
+});
+
+// Set the default map's cursor to a 'crosshair'.
+map.style().set('cursor', 'crosshair');
+
+// Set the center and zoom level of the new map.
+map.setCenter(84.07, 27.12, 10);
+
+// Load the Gandak River shapefile.
+
+// Create a visualization style for the river.
+var riverStyle = {
+  color: '#0000FF'
+};
+
+// Add the Gandak River to the map.
+map.addLayer(gandakRiver, riverStyle,'gandakRiverLayer',true,0.8);
+
+// Create a button to toggle the message visibility.
+var toggleButton = ui.Button({
+  label: 'GANDAK RIVER E-FLOW SIMULATOR (click to know more)',
+  style: {
+    width: '96%',
+    color: 'black',
+    fontWeight: 'bold',
+    fontFamily: buttonFontFamily,
+    backgroundColor: backgroundColor,
+    border: '1px solid black'
+  },
+});
+
+// Create a panel to hold the message.
+var messagePanel = ui.Panel({
+  style: {
+    width: '100%',
+    padding: '10px',
+    margin: '-5px 0 0 0',
+    backgroundColor: backgroundColor,
+    textAlign: 'justify'
+  },
+});
+
+// Create a label with the message.
+var messageLabel = ui.Label(
+  'Welcome to the Gandak River E-flow Simulator! This interactive dashboard allows users to assess the impacts of dry-season flow releases and regulations by the Triveni barrage on the Gandak river (Bihar, India), on the habitat available for endangered riverine wildlife such as the Gharial crocodile and Ganges river dolphin. The app allows users to modify the downstream river flow and water level as released from the barrage, and evaluate the potential risk to both species. The app can contribute to understanding the thresholds of river flow at which risks to wildlife can increase, thus helping assess the scope for provision of environmental and ecological flows in the Gandak River.',
+  {
+    fontFamily: textFontFamily,
+    fontSize: '14px',
+    backgroundColor: backgroundColor,
+    color: 'black'
+  }
+);
+
+// Add the message label to the message panel.
+messagePanel.add(messageLabel);
+
+// Hide the message panel initially.
+messagePanel.style().set('shown', false);
+
+// Create an event handler for the toggle button click.
+toggleButton.onClick(function () {
+  // Toggle the visibility of the message panel.
+  var shown = messagePanel.style().get('shown');
+  messagePanel.style().set('shown', !shown);
+});
+
+var toggleButtonPanel = ui.Panel({
+  widgets:[
+    toggleButton,
+    messagePanel
+  ],
+  style:{
+    width: '100%',
+    backgroundColor: backgroundColor,
+    margin: '0 0 20px 0',
+  }
+});
+
+// Create a label for the season selection
+var seasonLabel = ui.Label('The e-flow simulator is applicable for the dry-season months of March, April and May.', {
+  fontWeight: 'bold',
+  backgroundColor: backgroundColor,
+  color: '#000',
+  width: '100%',
+  position: 'top-center',
+  fontFamily: textFontFamily
+});
+
+var assumptionsLabel = ui.Label('Click here to see the assumptions and constraints', {
+  fontWeight: 'bold',
+  backgroundColor: backgroundColor,
+  color: '#000',
+  width: '100%',
+  position: 'top-center',
+  fontFamily: textFontFamily,
+  textDecoration: 'underline',
+  padding: '0 0 20px 0'
+});
+
+assumptionsLabel.setUrl('https://sites.google.com/atree.org/gandaksimulator/assumptions-constraints');
+
+// Create a dropdown widget for species selection
+var speciesDropdown = ui.Select({
+  items: ['Ganges River Dolphin', 'Gharial Crocodile'],
+  placeholder: 'SELECT A SPECIES',
+  style: {
+    width: '95%',
+    backgroundColor: backgroundColor,
+    color: '#000',
+    fontSize: '14px',
+    fontWeight: 'bold',
+    fontFamily: buttonFontFamily,
+    margin: '0px 0px 20px 8px',
+    border: '1px solid black'
+  },
+  onChange: function(){
+    stageSlider.setValue(stageSlider.getMin());
+    dischargeSlider.setValue(dischargeSlider.getMin());
+    rateOfChangeSlider.setValue(rateOfChangeSlider.getMin());
+    
+    stageSlider.setDisabled(false);
+    dischargeSlider.setDisabled(false);
+    rateOfChangeSlider.setDisabled(false);
+    
+    if(speciesDropdown.getValue() == "Ganges River Dolphin"){
+      gharialParametersPanel.style().set({
+        shown: false
+      });
+      parametersPanel.style().set({
+        shown: true
+      });
+    }else if(speciesDropdown.getValue() == "Gharial Crocodile"){
+      gharialParametersPanel.style().set({
+        shown: true
+      });
+      parametersPanel.style().set({
+        shown: true
+      });
+    }
+  }
+});
+
+var stagelabel = ui.Label('Move the slider to choose the river stage (m)', { fontWeight: 'bold', fontFamily: textFontFamily, backgroundColor: backgroundColor, fontSize: '12px' });
+
+// Create a slider widget for number of days of discharge selection
+var stageSlider = ui.Slider({
+  min: 103, // Changed min value
+  max: 107, // Changed max value
+  value: 103,
+  step: 0.25, // Changed step value
+  style: { width: '95%', backgroundColor: sliderBackgroundColor, color: '#000', fontFamily: textFontFamily, fontWeight: 'bold', border: '1px solid black'},
+});
+
+var dischargelabel = ui.Label('Move the slider to choose the river discharge (m3/s)', { fontWeight: 'bold', fontFamily: textFontFamily, backgroundColor: backgroundColor, fontSize: '12px' });
+
+// Create a slider widget for discharge rate selection
+var dischargeSlider = ui.Slider({
+  min: 100, // Changed min value
+  max: 500, // Changed max value
+  value: 100,
+  step: 1,
+  style: { width: '95%', backgroundColor: sliderBackgroundColor, color: '#000', fontFamily: textFontFamily, fontWeight: 'bold',border: '1px solid black'},
+});
+
+var ratelabel = ui.Label('Move the slider to choose the proportional change of river discharge (%)', { fontWeight: 'bold', fontFamily: textFontFamily, backgroundColor: backgroundColor, fontSize: '12px' });
+
+// New slider widget for rate of change of discharge selection
+var rateOfChangeSlider = ui.Slider({
+  min: 0, // Changed min value
+  max: 100, // Changed max value
+  value: 0,
+  step: 10, // Changed step value
+  style: { width: '95%', backgroundColor: sliderBackgroundColor, color: '#000', fontFamily: textFontFamily, fontWeight: 'bold',border: '1px solid black'},
+});
+
+var resetButton = ui.Button({
+  label: 'RESET ALL VALUES',
+  style: {
+    width: '95%',
+    backgroundColor: backgroundColor,
+    color: '#000',
+    fontWeight: 'bold',
+    fontFamily: buttonFontFamily,
+    border: '1px solid black',
+    position: 'bottom-left'
+  },
+});
+
+resetButton.onClick(function () {
+  stageSlider.setValue(stageSlider.getMin());
+  dischargeSlider.setValue(dischargeSlider.getMin());
+  rateOfChangeSlider.setValue(rateOfChangeSlider.getMin());
+  
+  stageSlider.setDisabled(false);
+  dischargeSlider.setDisabled(false);
+  rateOfChangeSlider.setDisabled(false);
+});
+
+var calculateButton = ui.Button({
+  label: 'CALCULATE ECOLOGICAL RISK',
+  style: {
+    width: '95%',
+    backgroundColor: backgroundColor,
+    color: '#000',
+    fontWeight: 'bold',
+    fontFamily: buttonFontFamily,
+    border: '1px solid black',
+    position: 'bottom-right'
+  },
+});
+
+calculateButton.onClick(function () {
+  if(speciesDropdown.getValue() == 'Gharial Crocodile'){
+    calculateWidthAndRiskForGharial();
+  }else{
+    if(calculatedD === undefined){
+      setDefaultDischargeValueForDepthCalculation();
+    }
+    calculateWidthAndRiskForDolphin(calculatedD);
+  }
+});
+
+var gharialOrLabel = ui.Label('--- AND ---', { fontWeight: 'bold', fontFamily: textFontFamily, backgroundColor: backgroundColor, fontSize: '18px', color: 'black', width: '98%', textAlign: 'center'});
+
+//Create a panel to group the parameters
+var gharialParametersPanel = ui.Panel({
+  widgets:[
+    gharialOrLabel,
+    ratelabel,
+    rateOfChangeSlider
+  ],
+  style:{
+    shown: false,
+    backgroundColor: backgroundColor,
+  }
+});
+
+var buttonsPanel = ui.Panel({
+  widgets:[
+    resetButton,calculateButton
+  ],
+  style:{
+    backgroundColor: backgroundColor
+  }
+});
+
+var parametersPanel = ui.Panel({
+  widgets:[
+    stagelabel,
+    stageSlider,
+    dischargelabel,
+    dischargeSlider,
+    gharialParametersPanel,
+    buttonsPanel
+  ],
+  style:{
+    width: '100%',
+    padding: '10px',
+    margin: '0 0 20px 0',
+    backgroundColor: backgroundColor,
+    shown: false
+  }
+});
+
+// Create a label to display the calculated W value
+var wValueLabel = ui.Label('', {
+  position: 'top-left',
+  width: '30%',
+  fontSize: '12px',
+  fontWeight: 'bold',
+  backgroundColor: canvasColor,
+  padding: '10px',
+  color: '#FFF',
+  textAlign: 'center',
+  shown: false,
+  fontFamily: textFontFamily
+});
+
+map.add(wValueLabel);
+
+// Create a panel to hold the input widgets
+var inputPanel = ui.Panel({
+  widgets: [
+    seasonLabel,
+    assumptionsLabel,
+    speciesDropdown
+  ],
+  style: {
+    padding: '10px',
+    margin: '0 0 20px 0',
+    width: '100%',
+    backgroundColor: backgroundColor, // Changed the background color to match the toggle button
+  },
+});
+
+// Create an event handler for the stage slider change
+stageSlider.onChange(function(value) {
+  if(speciesDropdown.getValue() == 'Gharial Crocodile'){
+    dischargeSlider.setValue(dischargeSlider.getMin());
+    dischargeSlider.setDisabled(true);
+  }else{
+    dischargeSlider.setDisabled(true);
+  }
+  
+  //n is Manning’s alluvial roughness coefficient 
+  var n = 0.028
+  
+  //S is river energy slope
+  var S=0.00023
+  
+  // Calculate discharge Q using the formula Q = 1e-42 * e^(0.9782 * S)
+  dischargeQ = 1e-42 * Math.exp(0.9782 * value);
+  print(dischargeQ);
+  
+  // Calculate W using the formula: Q = 0.0295 * W^1.545
+  var calculatedW = Math.pow(dischargeQ / 0.0295, 1 / 1.545);
+
+  calculatedD = Math.pow(((dischargeQ * n)/(calculatedW * (Math.pow(S,0.5)))),0.6);
+  
+  if(speciesDropdown.getValue() == "Ganges River Dolphin"){
+     wValueLabel.setValue('Calculated width of the river (m): ' + calculatedW.toFixed(2) + '. Average river depth (m): ' + calculatedD.toFixed(2));
+  }else{
+    wValueLabel.setValue('Calculated width of the river (m): ' + calculatedW.toFixed(2));
+  }
+});
+
+dischargeSlider.onChange(function(value) {
+  if(speciesDropdown.getValue() == 'Gharial Crocodile'){
+    stageSlider.setValue(stageSlider.getMin());
+    stageSlider.setDisabled(true);
+  }else{
+    stageSlider.setDisabled(true);
+  }
+  
+  //n is Manning’s alluvial roughness coefficient 
+  var n = 0.028
+  
+  //S is river energy slope
+  var S=0.00023
+  
+  var dischargeValueQ = '';
+  dischargeValueQ = dischargeSlider.getValue();
+  
+  var calculatedW = Math.pow(value / 0.0295, 1 / 1.545);
+  
+  calculatedD = Math.pow((dischargeValueQ * n)/(calculatedW * (Math.pow(S,0.5))),0.6);
+  
+  if(speciesDropdown.getValue() == "Ganges River Dolphin"){
+    wValueLabel.setValue('River channel width (m): ' + calculatedW.toFixed(2) + '. Average river depth (m): ' + calculatedD.toFixed(2));
+  }else{
+    wValueLabel.setValue('River channel width (m):  ' + calculatedW.toFixed(2));
+  }
+});
+
+rateOfChangeSlider.onChange(function(value) {
+  var calculatedW = Math.pow(dischargeSlider.getValue() / 0.0295, 1 / 1.545);
+  wValueLabel.setValue('River channel width (m):  ' + calculatedW.toFixed(2));
+  
+});
+
+var legend = ui.Panel({
+  style: {
+    backgroundColor: legendBackgroundColor,
+    position: 'bottom-right',
+    width: '15%',
+    padding: '8px 15px'
+  }
+});
+ 
+// Create legend title
+var legendTitle = ui.Label({
+  value: 'Risk Level',
+  style: {
+    backgroundColor: legendBackgroundColor,
+    fontFamily: textFontFamily,
+    fontWeight: 'bold',
+    fontSize: '18px',
+    margin: '0 0 4px 0',
+    padding: '0'
+  }
+});
+ 
+// Add the title to the panel
+legend.add(legendTitle);
+ 
+// Creates and styles 1 row of the legend.
+var makeRow = function(color, name) {
+  // Create the label that is actually the colored box.
+  var colorBox = ui.Label({
+    style: {
+      backgroundColor: '#' + color,
+      // Use padding to give the box height and width.
+      padding: '8px',
+      margin: '0 0 4px 0'
+    }
+  });
+
+  // Create the label filled with the description text.
+  var description = ui.Label({
+    value: name,
+    style: {margin: '0 0 4px 6px',backgroundColor: legendBackgroundColor, fontFamily: textFontFamily, fontWeight: 'bold'}
+  });
+
+  // return the panel
+  return ui.Panel({
+    widgets: [colorBox, description],
+    layout: ui.Panel.Layout.Flow('horizontal'),
+    style:{
+      backgroundColor: legendBackgroundColor
+    }
+  });
+};
+
+//  Palette with the colors
+var palette =['FF0000', 'FFFF00', '00FF00','0000FF'];
+ 
+// name of the legend
+var names = ['High','Moderate','Low','N/A'];
+ 
+// Add color and and names
+for (var i = 0; i < names.length; i++) {
+  legend.add(makeRow(palette[i], names[i]));
+}  
+ 
+// add legend to map (alternatively you can also print the legend to the console)
+map.add(legend);
+
+// Create a panel to hold the intro panel, input panel
+var mainPanel = ui.Panel({
+  widgets: [toggleButtonPanel,inputPanel,parametersPanel],
+  style: { padding: '20px', backgroundColor: canvasColor, width: '500px', border: '5px solid white' }, // Changed the background color to shades of brown (#8B4513)
+});
+
+
+
+// Set the layout of the main panel
+mainPanel.setLayout(ui.Panel.Layout.flow('vertical', true)); // Align widgets vertically
+
+// Set the layout of the app
+ui.root.setLayout(ui.Panel.Layout.flow('horizontal')); // Align panels horizontally
+
+// Add the main panel to the app
+ui.root.add(mainPanel);
+// Add custom map.
+ui.root.add(map);
+
+function showWValueLabel(){
+  wValueLabel.style().set({
+    shown: true
+  }); 
+}
+
+function calculateRiskForGharial(dischargeVal, proportionalChangeVal){
+  var dischargeColor = '',proportionalChangeColor = '', outputColor = '';
+  
+  if(dischargeVal >= 275){
+    dischargeColor = 'red';
+  }else if(dischargeVal >= 201 && dischargeVal <= 274){
+    dischargeColor = 'yellow';
+  }else if(dischargeVal >= 151 && dischargeVal <= 200){
+    dischargeColor = 'green';
+  }else{
+    dischargeColor = 'yellow';
+  }
+  
+  if(proportionalChangeVal >= 0.5){
+    proportionalChangeColor = 'red';
+  }else if(proportionalChangeVal > 0.3 && proportionalChangeVal <= 0.49){
+    proportionalChangeColor = 'yellow';
+  }else if(proportionalChangeVal <= 0.3){
+    proportionalChangeColor = 'green';
+  }
+  
+  if(dischargeColor == 'red'){
+    if(proportionalChangeColor == 'red'){
+      outputColor = 'red';
+    }else if(proportionalChangeColor == 'yellow'){
+      outputColor = 'red';
+    }else if(proportionalChangeColor == 'green'){
+      outputColor = 'yellow';
+    }
+  }else if(dischargeColor == 'yellow'){
+    if(proportionalChangeColor == 'red'){
+      outputColor = 'red';
+    }else if(proportionalChangeColor == 'yellow'){
+      outputColor = 'yellow';
+    }else if(proportionalChangeColor == 'green'){
+      outputColor = 'yellow';
+    }
+  }else if(dischargeColor == 'green'){
+    if(proportionalChangeColor == 'red'){
+      outputColor = 'yellow';
+    }else if(proportionalChangeColor == 'yellow'){
+      outputColor = 'green';
+    }else if(proportionalChangeColor == 'green'){
+      outputColor = 'green';
+    }
+  }
+  
+  return outputColor;
+}
+
+function calculateWidthAndRiskForDolphin(averageDepth){
+  
+  if(averageDepth <= 1.75){
+    riverStyle.color = '#FF0000';
+  }else if(averageDepth >= 1.76 && averageDepth <= 2.75){
+    riverStyle.color = '#FFFF00';
+  }else if(averageDepth >= 2.76){
+   riverStyle.color = '#00FF00';
+  }
+  
+  map.remove(map.layers().get(0));
+  map.addLayer(gandakRiver, riverStyle,'gandakRiverLayer',true,0.8);
+  
+  showWValueLabel();
+}
+
+function calculateWidthAndRiskForGharial(){
+  var dischargeValue = '', proportionalValue = '', color = '';
+  if(dischargeSlider.getDisabled()){
+    dischargeValue = dischargeQ;
+  }else{
+    dischargeValue = dischargeSlider.getValue();
+  }
+  print("dischargeValue == " + dischargeValue);
+  proportionalValue = rateOfChangeSlider.getValue()/100;
+  print(proportionalValue);
+  
+  color = calculateRiskForGharial(dischargeValue, proportionalValue);
+  
+  if(color == 'red'){
+    riverStyle.color = '#FF0000';
+  }else if(color == 'yellow'){
+    riverStyle.color = '#FFFF00';
+  }else if(color == 'green'){
+   riverStyle.color = '#00FF00';
+  }
+  
+  map.remove(map.layers().get(0));
+  map.addLayer(gandakRiver, riverStyle,'gandakRiverLayer',true,0.8);
+  
+  showWValueLabel();
+}
+
+function setDefaultDischargeValueForDepthCalculation(){
+  //n is Manning’s alluvial roughness coefficient 
+  var n = 0.028
+  
+  //S is river energy slope
+  var S=0.00023
+  
+  var value = dischargeSlider.getValue();
+  var calculatedW = Math.pow(value / 0.0295, 1 / 1.545);
+  calculatedD = Math.pow((value * n)/(calculatedW * (Math.pow(S,0.5))),0.6);
+  wValueLabel.setValue('Calculated width of the river (m): ' + calculatedW.toFixed(2) + '. Average river depth (m): ' + calculatedD.toFixed(2));
+  
+}
