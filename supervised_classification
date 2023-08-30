@@ -1,0 +1,123 @@
+var image = ee.ImageCollection("LANDSAT/LC08/C02/T1_L2")
+    .filterBounds(gandak_floodplain)
+    .filter(ee.Filter.eq('DATE_ACQUIRED', 'YYYY-MM-DD'))
+    .first()
+    
+print(image);
+var clipped = image.clip(gandak_floodplain)
+
+Map.addLayer(image, {bands: ['SR_B6', 'SR_B5', 'SR_B3'], min: 5000, max: 40000}, 'landsat_YYYYMMDD');
+Map.addLayer(training_polygons, {color: 'red'}, 'training') ;
+Map.addLayer(gandak_floodplain, {}, 'gandak_shape');
+
+// Supervised classification
+var gcps = water.merge(wetsand).merge(fresh_aluvium).merge(old_aluvium).merge(vegetation);
+print(gcps)
+
+var training = clipped.sampleRegions({
+  collection: gcps, 
+  properties: ['LCtype'], 
+  scale: 30
+});
+
+// Train a classifier.
+var classifier = ee.Classifier.smileRandomForest(50).train({
+  features: training,  
+  classProperty: 'LCtype', 
+  inputProperties: clipped.bandNames()
+});
+
+// // // Classify the image.
+var classified = clipped.classify(classifier);
+Map.addLayer(classified, {min: 0, max: 4, palette: ['blue', 'green', 'brown','yellow','orange']}, 'classified'); 
+
+// adding a column of random numbers
+var gcps = gcps.randomColumn();
+
+// This being a simpler classification, we take 60% points
+// for validation. Normal recommended ratio is
+// 70% training, 30% validation
+var trainingGcp = gcps.filter(ee.Filter.lt('random', 0.7));
+print(trainingGcp)
+var validationGcp = gcps.filter(ee.Filter.gte('random', 0.7));
+print(validationGcp);
+
+
+//Classification of trainingGcp
+var trainingCheck = clipped.sampleRegions({
+  collection: trainingGcp , 
+  properties: ['LCtype'], 
+  scale: 30
+});
+
+// Train a classifier.
+var classifierTrainingGcp = ee.Classifier.smileRandomForest(50).train({
+  features: trainingCheck,  
+  classProperty: 'LCtype', 
+  inputProperties: clipped.bandNames()
+});
+
+// // // Classify the image.
+var classifiedTrained = clipped.classify(classifierTrainingGcp);
+Map.addLayer(classifiedTrained, {min: 0, max: 4, palette: ['blue', 'green', 'brown','yellow','orange']}, 'classified - to check'); 
+
+// Classifying/ validating using validationGcps
+var validation = clipped.sampleRegions({
+  collection: validationGcp,
+  properties: ['LCtype'],
+  scale: 30,
+});
+
+var test = validation.classify(classifierTrainingGcp);
+
+
+var testConfusionMatrix = test.errorMatrix('LCtype', 'classification')
+// Printing of confusion matrix may time out. Alternatively, you can export it as CSV
+print('Confusion Matrix', testConfusionMatrix);
+print('Test Accuracy', testConfusionMatrix.accuracy())
+
+var fc = ee.FeatureCollection([
+  ee.Feature(null, {
+    'accuracy': testConfusionMatrix.accuracy(),
+    'matrix': testConfusionMatrix.array()
+  })
+]);
+
+print(fc);
+print('Producers Accuracy:', testConfusionMatrix.producersAccuracy());
+print('Consumers Accuracy:', testConfusionMatrix.consumersAccuracy());
+print('Kappa:', testConfusionMatrix.kappa());
+
+Export.table.toDrive({
+  collection: fc,
+  description: 'Accuracy_Export',
+  folder: 'IIT_GEE',
+  fileNamePrefix: 'accuracy',
+  fileFormat: 'CSV'
+});
+
+
+var areaImage = ee.Image.pixelArea().addBands(
+      classified)
+ 
+var areas = areaImage.reduceRegion({
+reducer: ee.Reducer.sum().group({
+groupField: 1,
+groupName: 'class',
+}),
+geometry: gandak_floodplain.geometry(),
+scale: 30,
+maxPixels: 1e10
+}); 
+ 
+print(areas);
+
+//Export
+Export.image.toDrive({
+  image: classified,
+  description: '2014-03-17_supervisedClassified',
+  folder: 'IIT_GEE',  
+  region: gandak_floodplain, scale: 30,
+  maxPixels: 1e13,
+}); 
+
